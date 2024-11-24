@@ -3,6 +3,7 @@ namespace TelegramBot.Domain.Models;
 public class Auto
 {
     public Guid Id { get; set; }
+    public Guid PersonId {get; set;}
     public string Brand { get; set; }
     public string YearofIssue { get; set; }
     public string Body { get; set; }
@@ -13,5 +14,4 @@ public class Auto
     public string Drive {get; set;}
     public int Mileage {get; set;}
     public string Registration {get; set;}
-    public Guid ClientId {get; set;}
 }
