@@ -1,8 +1,9 @@
+using TelegramBot.App.Interfaces;
 using TelegramBot.Domain.Models;
 
 namespace TelegramBot.Data.Storage;
 
-public class PersonStorage
+public class PersonStorage : IPersonStorage
 {
     private readonly TelegramBotDbContext _dbContext;
 
