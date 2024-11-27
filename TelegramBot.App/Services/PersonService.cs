@@ -1,39 +1,45 @@
+using AutoMapper;
+using TelegramBot.App.DTO;
 using TelegramBot.App.Interfaces;
 using TelegramBot.Domain.Models;
 
 namespace TelegramBot.App.Services;
 
-public class PersonService
+public class PersonService : IPersonService
 {
     IPersonStorage _personStorage;
+    private IMapper _mapper;
 
-    public PersonService(IPersonStorage personStorage)
+    public PersonService(IPersonStorage personStorage, IMapper mapper)
     {
         _personStorage = personStorage;
+        _mapper = mapper;
     }
 
-    public async Task AddPersonAsync(Person person)
+    public async Task AddPersonAsync(PersonDto personDto)
     {
-        if(person == null)
-            throw new ArgumentNullException(nameof(person));
+        if(personDto == null)
+            throw new ArgumentNullException(nameof(personDto));
         
+        Person person = _mapper.Map<Person>(personDto);
         await _personStorage.AddPersonAsync(person);
     }
 
-    public async Task EditPersonAsync(Person person)
+    public async Task EditPersonAsync(PersonDto personDto)
     {
-        if(person == null)
-            throw new ArgumentNullException(nameof(person));
+        if(personDto == null)
+            throw new ArgumentNullException(nameof(personDto));
         
+        Person person = _mapper.Map<Person>(personDto);
         await _personStorage.EditPersonAsync(person);
     }
 
-    public async Task DeletePersonAsync(Person person)
+    public async Task DeletePersonAsync(Guid personId)
     {
-        if(person == null)
-            throw new ArgumentNullException(nameof(person));
+        if(personId == Guid.Empty)
+            throw new ArgumentNullException(nameof(personId));
         
-        await _personStorage.DeletePersonAsync(person);
+        await _personStorage.DeletePersonAsync(personId);
     }
 
     public async Task<Person> GetPersonsAsync(Guid personId)

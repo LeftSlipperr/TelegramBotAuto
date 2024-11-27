@@ -24,9 +24,9 @@ public class PersonStorage : IPersonStorage
         await _dbContext.SaveChangesAsync();
     }
 
-    public async Task DeletePersonAsync(Person person)
+    public async Task DeletePersonAsync(Guid personId)
     {
-        _dbContext.Persons.Remove(person);
+        _dbContext.Persons.Remove(await _dbContext.Persons.FindAsync(personId));
         await _dbContext.SaveChangesAsync();
     }
 

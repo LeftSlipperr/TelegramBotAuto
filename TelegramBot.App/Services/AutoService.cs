@@ -1,18 +1,18 @@
+using AutoMapper;
+using TelegramBot.App.DTO;
 using TelegramBot.App.Interfaces;
 using TelegramBot.Domain.Models;
 
 namespace TelegramBot.App.Services;
 
-public class AutoService
+public class AutoService : IAutoService
 {
     IAutoStorage _autoStorage;
-
-    public AutoService(IAutoStorage autoStorage)
+    private IMapper _mapper;
+    public AutoService(IAutoStorage autoStorage, IMapper mapper)
     {
-        if (autoStorage == null)
-            throw new ArgumentNullException(nameof(autoStorage));
-        
         _autoStorage = autoStorage;
+        _mapper = mapper;
     }
 
     public async Task AutoAddAsync(Auto auto)
@@ -31,7 +31,7 @@ public class AutoService
         await _autoStorage.AutoDeleteAsync(auto);
     }
 
-    public async Task AutoUpdateAsync(Auto auto)
+    public async Task UpdateAutoAsync(Auto auto)
     {
         if (auto == null)
             throw new ArgumentNullException(nameof(auto));

@@ -5,11 +5,12 @@ public class Auto
     public Guid Id { get; set; }
     public Guid PersonId {get; set;}
     public string Brand { get; set; }
-    public string YearofIssue { get; set; }
+    public string iImageUrl { get; set; }
+    public int YearofIssue { get; set; }
     public string Body { get; set; }
-    public string SeatInTheCabin  { get; set; }
+    public int SeatInTheCabin  { get; set; }
     public string FuelType { get; set; }
-    public string EngineSize { get; set; }
+    public int EngineSize { get; set; }
     public string Transmission  { get; set; }
     public string Drive {get; set;}
     public int Mileage {get; set;}
