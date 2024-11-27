@@ -40,9 +40,8 @@ namespace TelegramBot.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("EngineSize")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<int>("EngineSize")
+                        .HasColumnType("integer");
 
                     b.Property<string>("FuelType")
                         .IsRequired()
@@ -58,15 +57,17 @@ namespace TelegramBot.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("SeatInTheCabin")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<int>("SeatInTheCabin")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Transmission")
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("YearofIssue")
+                    b.Property<int>("YearofIssue")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("iImageUrl")
                         .IsRequired()
                         .HasColumnType("text");
 
