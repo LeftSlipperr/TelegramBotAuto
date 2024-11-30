@@ -6,13 +6,12 @@ namespace TelegramBot.Data;
 
 public class TelegramBotDbContext : DbContext
 {
+    
+    public TelegramBotDbContext(DbContextOptions<TelegramBotDbContext> options) : base(options) { }
+    
     public DbSet<Person> Persons => Set<Person>();
     public DbSet<Auto> Autos => Set<Auto>();
     
-    public TelegramBotDbContext(DbContextOptions<TelegramBotDbContext> options)
-        : base(options)
-    {
-    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -20,4 +19,10 @@ public class TelegramBotDbContext : DbContext
         var assembly = Assembly.GetExecutingAssembly();
         modelBuilder.ApplyConfigurationsFromAssembly(assembly);
     }
+    
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        optionsBuilder.UseNpgsql("Host=localhost;Port=5435;Username=postgres;Password=postgres;Database=postgres");
+    }
+    
 }

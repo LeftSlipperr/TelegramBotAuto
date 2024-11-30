@@ -40,10 +40,14 @@ namespace TelegramBot.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int>("EngineSize")
-                        .HasColumnType("integer");
+                    b.Property<double>("EngineSize")
+                        .HasColumnType("double precision");
 
                     b.Property<string>("FuelType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ImageUrl")
                         .IsRequired()
                         .HasColumnType("text");
 
@@ -67,9 +71,8 @@ namespace TelegramBot.Data.Migrations
                     b.Property<int>("YearofIssue")
                         .HasColumnType("integer");
 
-                    b.Property<string>("iImageUrl")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<long>("chatId")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -84,6 +87,9 @@ namespace TelegramBot.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("AddingAuto")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -93,8 +99,14 @@ namespace TelegramBot.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("RegistrationStep")
+                        .HasColumnType("integer");
+
                     b.Property<string>("SecondName")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TempAutoData")
                         .HasColumnType("text");
 
                     b.Property<string>("ThirdName")
@@ -104,6 +116,9 @@ namespace TelegramBot.Data.Migrations
                     b.Property<string>("UserName")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<long>("chatId")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 

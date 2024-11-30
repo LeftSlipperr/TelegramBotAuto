@@ -9,9 +9,9 @@ using TelegramBot.Data.Storage;
 var builder = WebApplication.CreateBuilder(args);
 
 
-var connectionString = builder.Configuration.GetConnectionString("TelegramBotDb");
+/*var connectionString = builder.Configuration.GetConnectionString("TelegramBotDb");
 builder.Services.AddDbContext<TelegramBotDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    options.UseNpgsql(connectionString));*/
 
 
 builder.Services.AddControllers();
