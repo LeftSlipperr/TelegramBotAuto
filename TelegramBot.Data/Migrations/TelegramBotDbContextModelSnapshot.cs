@@ -99,14 +99,11 @@ namespace TelegramBot.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int>("RegistrationStep")
-                        .HasColumnType("integer");
+                    b.Property<bool>("SearchingAutoByBrand")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("SecondName")
                         .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("TempAutoData")
                         .HasColumnType("text");
 
                     b.Property<string>("ThirdName")

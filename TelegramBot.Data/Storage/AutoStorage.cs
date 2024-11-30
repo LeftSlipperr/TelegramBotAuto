@@ -41,7 +41,24 @@ public class AutoStorage : IAutoStorage
         _dbContext.Autos.Update(auto);
         await _dbContext.SaveChangesAsync();
     }
-    
+
+    public async Task<List<Auto>> GetBrandByParametersAsync(string? Brand = null,
+        int pageNumber = 1, int pageSize = 10, string sortBy = "Brand")
+    {
+        var query = _dbContext.Autos.AsQueryable();
+
+        if (!string.IsNullOrEmpty(Brand.ToLower()))
+            query = query.Where(c => c.Brand.ToLower().Contains(Brand.ToLower()));
+        if (sortBy == "Brand")
+        {
+            query = query.OrderBy(c => c.Brand);
+        }
+
+        query = query.Skip((pageNumber - 1) * pageSize).Take(pageSize);
+
+        return await query.ToListAsync();
+    }
+
     public async Task<List<Auto>> GetAutosByParametersAsync(string? Brand = null, string? ImageUrl = null,
         int? YearofIssue = null, string? Body = null, int? SeatInTheCabin = null,
         long? chatId = null, int? EngineSize = null, string? Transmission = null,  string? Drive = null,

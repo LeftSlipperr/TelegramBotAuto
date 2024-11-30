@@ -11,8 +11,6 @@ public class Person
     public string UserName {get; set;}
     public string PhoneNumber { get; set; }
     public bool AddingAuto { get; set; }
-    public string? TempAutoData { get; set; }
-    public int RegistrationStep {get; set;}
-    
+    public bool SearchingAutoByBrand { get; set; }
     public ICollection<Auto> Autos { get; set; }
 }

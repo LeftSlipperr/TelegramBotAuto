@@ -24,7 +24,7 @@ class Program
 
     static async Task Main()
     {
-        var serviceProvider = new ServiceCollection()
+       var serviceProvider = new ServiceCollection()
             .AddDbContext<TelegramBotDbContext>(options =>
                 options.UseNpgsql(
                     "Host=localhost;Port=5435;Username=postgres;Password=postgres;Database=postgres")) // Укажите строку подключения
@@ -71,236 +71,210 @@ class Program
 
         using var scope = _serviceProvider.CreateScope();
         var personStorage = scope.ServiceProvider.GetRequiredService<IPersonStorage>();
-        var autoStorage = scope.ServiceProvider.GetRequiredService<IAutoStorage>();
 
         var users = await personStorage.GetPersonsByParametersAsync(chatId: chatId);
         var user = users.FirstOrDefault();
-        var autos = await autoStorage.GetAutosByParametersAsync(chatId: chatId);
-        Auto auto = autos.FirstOrDefault();
+        if (user == null)
+        {
+            // Проверяем, является ли сообщение форматом регистрации
+            if (await TryRegisterUserAsync(personStorage, chatId, message.Text, cancellationToken))
+            {
+                // Если регистрация успешна, показываем главное меню
+                await ShowMainMenuAsync(botClient, chatId, cancellationToken);
+            }
+            else
+            {
+                // Если формат данных некорректен, просим пользователя ввести данные снова
+                await botClient.SendTextMessageAsync(
+                    chatId,
+                    "Добро пожаловать! Для продолжения заполните ваши данные:\n\nВведите их в формате:\nИмя Фамилия Отчество @Ник Телефон",
+                    cancellationToken: cancellationToken
+                );
+            }
 
+            return; // Завершаем обработку, чтобы не продолжать лишнюю проверку
+        }
         
-            if (user == null)
+
+        if (update.Message.Type == MessageType.Photo)
+        {
+            Console.WriteLine("Фото получено!");
+            var photo = update.Message.Photo.OrderByDescending(p => p.FileSize).FirstOrDefault();
+            if (photo != null)
             {
-                // Проверяем, является ли сообщение форматом регистрации
-                if (await TryRegisterUserAsync(personStorage, chatId, message.Text, cancellationToken))
-                {
-                    // Если регистрация успешна, показываем главное меню
-                    await ShowMainMenuAsync(botClient, chatId, cancellationToken);
-                }
-                else
-                {
-                    // Если формат данных некорректен, просим пользователя ввести данные снова
-                    await botClient.SendTextMessageAsync(
-                        chatId,
-                        "Добро пожаловать! Для продолжения заполните ваши данные:\n\nВведите их в формате:\nИмя Фамилия Отчество @Ник Телефон",
-                        cancellationToken: cancellationToken
-                    );
-                }
+                // Токен вашего бота
+                var botToken = "7927427975:AAE1Kmiqn94Ae6wEb0eXcsRJec-874LYLxU";
 
-                return; // Завершаем обработку, чтобы не продолжать лишнюю проверку
+                // Получаем файл (например, фото)
+                var file = await botClient.GetFileAsync(message.Photo.Last().FileId);
+
+                // Строим URL для скачивания файла
+                var fileUrl = $"https://api.telegram.org/file/bot{botToken}/{file.FilePath}";
+                await HandlePhotoAsync(botClient, update.Message.Chat.Id, fileUrl, cancellationToken);
             }
+        }
 
-
-            if (update.Message.Type == MessageType.Photo)
+        if (user.AddingAuto) // Проверяем, в процессе ли пользователь добавления авто
+        {
+            if (message.Text == "Отменить действие")
             {
-                Console.WriteLine("Фото получено!");
-                var photo = update.Message.Photo.OrderByDescending(p => p.FileSize).FirstOrDefault();
-                if (photo != null)
-                {
-                    // Токен вашего бота
-                    var botToken = "7927427975:AAE1Kmiqn94Ae6wEb0eXcsRJec-874LYLxU";
-
-                    // Получаем файл (например, фото)
-                    var file = await botClient.GetFileAsync(message.Photo.Last().FileId);
-
-                    // Строим URL для скачивания файла
-                    var fileUrl = $"https://api.telegram.org/file/bot{botToken}/{file.FilePath}";
-                    await HandlePhotoAsync(botClient, update.Message.Chat.Id, fileUrl, cancellationToken);
-                }
+                user.AddingAuto = false; // Сбрасываем флаг
+                await personStorage.EditPersonAsync(user); // Обновляем состояние пользователя в базе данных
+                await botClient.SendTextMessageAsync(chatId, "Действие отменено.", cancellationToken: cancellationToken);
+                return; // Завершаем обработку
             }
-
-            // Если пользователь найден, обрабатываем команды
-            switch (message.Text)
+            
+            if (await TryAddAutoAsync(scope.ServiceProvider.GetRequiredService<IAutoStorage>(), chatId, message.Text,
+                    user, cancellationToken))
             {
-                case "/start":
-                    await ShowMainMenuAsync(botClient, chatId, cancellationToken);
-                    break;
-
-                case "Добавить объявление":
-                    await StartAddingAutoAsync(botClient, chatId, cancellationToken);
-                    break;
-                case "Мои объявления":
-                    await ShowUserAutosAsync(botClient, chatId, cancellationToken);
-                    break;
-                case "Отменить действие":
-                    ShowMainMenuAsync(botClient, chatId, cancellationToken);
-                    break;
+                user.AddingAuto = false; // Сбрасываем флаг
+                // Обновляем состояние в базе данных
+                await personStorage.EditPersonAsync(user);
             }
-
-            if (user.AddingAuto) // Проверяем, в процессе ли пользователь добавления авто
+            else 
             {
-                if (message.Text == "Отменить действие")
-                {
-                    user.AddingAuto = false; // Сбрасываем флаг
-                    await personStorage.EditPersonAsync(user); // Обновляем состояние пользователя в базе данных
-                    await botClient.SendTextMessageAsync(chatId, "Действие отменено.",
-                        cancellationToken: cancellationToken);
-                    return; // Завершаем обработку
-                }
-
-                switch (user.RegistrationStep)
-                {
-                    case 1:
-                        if (message.Text == "Добавить объявление")
-                        {
-                            await botClient.SendTextMessageAsync(chatId, "Введите бренд автомобиля:",
-                                cancellationToken: cancellationToken);
-                        }
-                        else
-                        {
-                            await botClient.SendTextMessageAsync(chatId, "Введите год:",
-                                cancellationToken: cancellationToken);
-                            auto.Brand = message.Text;
-                            user.RegistrationStep++;
-                            await personStorage.EditPersonAsync(user);
-                        }
-                        break;
-
-                    case 2:
-                        await botClient.SendTextMessageAsync(chatId, "Введите кузов:",
-                            cancellationToken: cancellationToken);
-                        if (int.TryParse(message.Text, out var year))
-                        {
-                            auto.YearofIssue = Convert.ToInt32(message.Text);
-                            user.RegistrationStep++;
-                            await personStorage.EditPersonAsync(user);
-                        }
-                        else
-                        {
-                            await botClient.SendTextMessageAsync(chatId, "Некорректный год. Попробуйте снова.",
-                                cancellationToken: cancellationToken);
-                        }
-
-                        break;
-
-                    case 3:
-                        await botClient.SendTextMessageAsync(chatId, "Введите количество мест",
-                            cancellationToken: cancellationToken);
-                        auto.Body = message.Text;
-                        user.RegistrationStep++;
-                        await personStorage.EditPersonAsync(user);
-                        break;
-
-                    case 4:
-                        await botClient.SendTextMessageAsync(chatId, "Введите тип топлива",
-                            cancellationToken: cancellationToken);
-                        if (int.TryParse(message.Text, out var seats))
-                        {
-                            auto.SeatInTheCabin = seats;
-                            user.RegistrationStep++;
-                            await personStorage.EditPersonAsync(user);
-                        }
-                        else
-                        {
-                            await botClient.SendTextMessageAsync(chatId,
-                                "Некорректное количество мест. Попробуйте снова.",
-                                cancellationToken: cancellationToken);
-                        }
-
-                        break;
-
-                    case 5:
-                        await botClient.SendTextMessageAsync(chatId, "Введите объем двигателя (л)",
-                            cancellationToken: cancellationToken);
-                        auto.FuelType = message.Text;
-                        user.RegistrationStep++;
-                        await personStorage.EditPersonAsync(user);
-                        break;
-
-                    case 6:
-                        await botClient.SendTextMessageAsync(chatId, "Введите тип трансмиссии:",
-                            cancellationToken: cancellationToken);
-                        if (double.TryParse(message.Text, NumberStyles.Any, CultureInfo.InvariantCulture,
-                                out var engineSize))
-                        {
-                            auto.EngineSize = engineSize;
-                            user.RegistrationStep++;
-                            await personStorage.EditPersonAsync(user);
-                        }
-                        else
-                        {
-                            await botClient.SendTextMessageAsync(chatId,
-                                "Некорректный объем двигателя. Попробуйте снова.",
-                                cancellationToken: cancellationToken);
-                        }
-
-                        break;
-
-                    case 7:
-                        await botClient.SendTextMessageAsync(chatId, "Введите пробега.",
-                            cancellationToken: cancellationToken);
-                        auto.Transmission = message.Text;
-                        user.RegistrationStep++;
-                        await personStorage.EditPersonAsync(user);
-                        break;
-
-                    case 8:
-                        await botClient.SendTextMessageAsync(chatId,
-                            "Отправьте фото.",
-                            cancellationToken: cancellationToken);
-                        if (int.TryParse(message.Text, out var mileage))
-                        {
-                            auto.Mileage = mileage;
-                            user.RegistrationStep++;
-                            await personStorage.EditPersonAsync(user);
-                        }
-                        else
-                        {
-                            await botClient.SendTextMessageAsync(chatId, "Некорректный пробег. Попробуйте снова.",
-                                cancellationToken: cancellationToken);
-                        }
-
-                        break;
-
-                    case 9:
-                        if (message.Type == MessageType.Photo)
-                        {
-                            var photo = message.Photo.OrderByDescending(p => p.FileSize).FirstOrDefault();
-                            if (photo != null)
-                            {
-                                var botToken = "7927427975:AAE1Kmiqn94Ae6wEb0eXcsRJec-874LYLxU";
-                                var file = await botClient.GetFileAsync(photo.FileId);
-                                var fileUrl = $"https://api.telegram.org/file/bot{botToken}/{file.FilePath}";
-                                auto.ImageUrl = fileUrl;
-
-                                await autoStorage.AutoAddAsync(auto);
-                                user.AddingAuto = false;
-                                user.RegistrationStep = 0;
-
-                                await personStorage.EditPersonAsync(user);
-                                await botClient.SendTextMessageAsync(chatId, "Объявление успешно добавлено!",
-                                    cancellationToken: cancellationToken);
-                            }
-                        }
-                        else
-                        {
-                            await botClient.SendTextMessageAsync(chatId, "Ожидалось фото. Попробуйте снова.",
-                                cancellationToken: cancellationToken);
-                        }
-
-                        break;
-
-                    default:
-                        user.AddingAuto = false;
-                        user.RegistrationStep = 0;
-                        await personStorage.EditPersonAsync(user);
-                        await botClient.SendTextMessageAsync(chatId, "Что-то пошло не так. Начните процесс заново.",
-                            cancellationToken: cancellationToken);
-                        break;
-                }
+                await botClient.SendTextMessageAsync(chatId, "Некорректный формат данных. Попробуйте снова.", cancellationToken: cancellationToken);
             }
+            return; // Завершаем обработку, так как состояние обработано
+        }
+        // Если пользователь найден, обрабатываем команды
+        switch (message.Text)
+        {
+            case "/start":
+                await ShowMainMenuAsync(botClient, chatId, cancellationToken);
+                break;
+
+            case "Добавить объявление":
+                await StartAddingAutoAsync(botClient, chatId, cancellationToken);
+                users = await personStorage.GetPersonsByParametersAsync(chatId: chatId);
+                var currentUser = users.FirstOrDefault();
+
+                if (currentUser != null && currentUser.SearchingAutoByBrand)
+                {
+                    await SearchAutosByBrandAsync(botClient, chatId, message.Text, cancellationToken);
+                    currentUser.SearchingAutoByBrand = false; // Сбрасываем флаг
+                    await personStorage.EditPersonAsync(currentUser);
+                }
+                break;
+            case "Мои объявления":
+                await ShowUserAutosAsync(botClient, chatId, cancellationToken);
+                users = await personStorage.GetPersonsByParametersAsync(chatId: chatId);
+                currentUser = users.FirstOrDefault();
+
+                if (currentUser != null && currentUser.SearchingAutoByBrand)
+                {
+                    await SearchAutosByBrandAsync(botClient, chatId, message.Text, cancellationToken);
+                    currentUser.SearchingAutoByBrand = false; // Сбрасываем флаг
+                    await personStorage.EditPersonAsync(currentUser);
+                }
+                break;
+            case "Отменить действие":
+                ShowMainMenuAsync(botClient, chatId, cancellationToken);
+                users = await personStorage.GetPersonsByParametersAsync(chatId: chatId);
+                currentUser = users.FirstOrDefault();
+
+                if (currentUser != null && currentUser.SearchingAutoByBrand)
+                {
+                    await SearchAutosByBrandAsync(botClient, chatId, message.Text, cancellationToken);
+                    currentUser.SearchingAutoByBrand = false; // Сбрасываем флаг
+                    await personStorage.EditPersonAsync(currentUser);
+                }
+                break;
+            case "Поиск объявлений":
+                await RequestBrandForSearchAsync(botClient, chatId, cancellationToken);
+                break;;
+            default:
+                users = await personStorage.GetPersonsByParametersAsync(chatId: chatId);
+                currentUser = users.FirstOrDefault();
+
+                if (currentUser != null && currentUser.SearchingAutoByBrand)
+                {
+                    await SearchAutosByBrandAsync(botClient, chatId, message.Text, cancellationToken);
+                    currentUser.SearchingAutoByBrand = false; // Сбрасываем флаг
+                    await personStorage.EditPersonAsync(currentUser);
+                }
+                break;
+        }
+
+
+    }
+    private static async Task RequestBrandForSearchAsync(
+        ITelegramBotClient botClient,
+        long chatId,
+        CancellationToken cancellationToken)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var personStorage = scope.ServiceProvider.GetRequiredService<IPersonStorage>();
+        var users = await personStorage.GetPersonsByParametersAsync(chatId: chatId);
+        var user = users.FirstOrDefault();
+
+        if (user != null)
+        {
+            user.SearchingAutoByBrand = true; // Устанавливаем флаг поиска
+            await personStorage.EditPersonAsync(user);
+        }
+
+        await botClient.SendTextMessageAsync(
+            chatId,
+            "Введите название бренда для поиска автомобилей:",
+            cancellationToken: cancellationToken
+        );
+    }
+    
+    private static async Task SearchAutosByBrandAsync(
+        ITelegramBotClient botClient,
+        long chatId,
+        string brand,
+        CancellationToken cancellationToken)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var autoStorage = scope.ServiceProvider.GetRequiredService<IAutoStorage>();
+        var personStorage = scope.ServiceProvider.GetRequiredService<IPersonStorage>();
+
+        // Получаем список автомобилей по бренду
+        var autos = await autoStorage.GetBrandByParametersAsync(Brand: brand);
+        
+        if (!autos.Any())
+        {
+            await botClient.SendTextMessageAsync(
+                chatId,
+                $"Автомобили с брендом \"{brand}\" не найдены.",
+                cancellationToken: cancellationToken
+            );
+            return;
+        }
+
+        foreach (var auto in autos)
+        {
+            var users = await personStorage.GetPersonsByParametersAsync(chatId: auto.chatId);
+            Person user = users.FirstOrDefault();
+            
+            var message = $"🚗 *Бренд*: {auto.Brand}\n" +
+                          $"📅 *Год выпуска*: {auto.YearofIssue}\n" +
+                          $"💺 *Мест*: {auto.SeatInTheCabin}\n" +
+                          $"🔧 *Объем двигателя*: {auto.EngineSize} л\n" +
+                          $"⚙️ *Трансмиссия*: {auto.Transmission}\n" +
+                          $"📏 *Пробег*: {auto.Mileage} км\n\n" +
+                          $"👤 *Владелец*: { user.Name } {user.SecondName} {user.ThirdName} {user.UserName}\n" +
+                          $"📞 *Телефон*: {user.PhoneNumber}";
+
+            await botClient.SendTextMessageAsync(
+                chatId,
+                message,
+                cancellationToken: cancellationToken
+            );
+
+            using var httpClient = new HttpClient();
+            using var stream = await httpClient.GetStreamAsync(auto.ImageUrl);
+            await botClient.SendPhotoAsync(
+                chatId,
+                photo: stream,
+                cancellationToken: cancellationToken
+            );
+        }
     }
 
+    
     private static async Task<bool> TryRegisterUserAsync(
         IPersonStorage personStorage,
         long chatId,
@@ -347,7 +321,7 @@ class Program
 
         foreach (var auto in autos)
         {
-            var message = $"🚗 *Марка*: {auto.Brand}\n" +
+            var message = $"🚗 *Бренд*: {auto.Brand}\n" +
                           $"📅 *Год выпуска*: {auto.YearofIssue}\n" +
                           $"🚙 *Тип кузова*: {auto.Body}\n" +
                           $"💺 *Мест*: {auto.SeatInTheCabin}\n" +
@@ -362,7 +336,6 @@ class Program
             await botClient.SendTextMessageAsync(
                 chatId,
                 message,
-                //(int?)ParseMode.Markdown,
                 cancellationToken: cancellationToken
             );
 
@@ -378,22 +351,29 @@ class Program
 
     
     private static async Task StartAddingAutoAsync(
-        ITelegramBotClient botClient,
-        long chatId,
-        CancellationToken cancellationToken)
-    {
-        using var scope = _serviceProvider.CreateScope();
-        var personStorage = scope.ServiceProvider.GetRequiredService<IPersonStorage>();
-        var users = await personStorage.GetPersonsByParametersAsync(chatId: chatId);
-        var user = users.FirstOrDefault();
+    ITelegramBotClient botClient,
+    long chatId,
+    CancellationToken cancellationToken)
+{
+    using var scope = _serviceProvider.CreateScope();
+    var personStorage = scope.ServiceProvider.GetRequiredService<IPersonStorage>();
+    var users = await personStorage.GetPersonsByParametersAsync(chatId: chatId);
+    var user = users.FirstOrDefault();
 
-        if (user?.AddingAuto != true) // Проверка, не находится ли пользователь уже в процессе добавления авто
-        {
-            user.AddingAuto = true;  // Устанавливаем флаг в true, если процесс добавления авто начинается
-            user.RegistrationStep = 1;  // Начинаем с первого шага
-            await personStorage.EditPersonAsync(user);
-        }
+    if (user != null)
+    {
+        user.AddingAuto = true;
+        await personStorage.EditPersonAsync(user); // Сохраняем изменения в базе данных
     }
+
+    await botClient.SendTextMessageAsync(
+        chatId,
+        "Введите данные об автомобиле в формате:\n\n" +
+        "Бренд, Год выпуска, Тип кузова, Количество мест, " +
+        "Тип топлива, Объем двигателя(через точку), Трансмиссия, Привод, Пробег, Регистрация",
+        cancellationToken: cancellationToken
+    );
+}
 
 private static async Task<bool> TryAddAutoAsync(
     IAutoStorage autoStorage,

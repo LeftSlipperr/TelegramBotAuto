@@ -14,4 +14,7 @@ public interface IAutoStorage
         long? chatId = null, int? EngineSize = null, string? Transmission = null,  string? Drive = null,
         int? Mileage = null, string? Registration = null, Guid? PersonId = null,
         int pageNumber = 1, int pageSize = 10, string sortBy = "Brand");
+
+    Task<List<Auto>> GetBrandByParametersAsync(string? Brand = null,
+        int pageNumber = 1, int pageSize = 10, string sortBy = "Brand");
 }
