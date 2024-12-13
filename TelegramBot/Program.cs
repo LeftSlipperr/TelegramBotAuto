@@ -43,6 +43,7 @@ class Program
                     [] // Тут указываем типы получаемых Updateов, о них подробнее расказано тут https://core.telegram.org/bots/api#update
                     {
                         UpdateType.Message, // Сообщения (текст, фото/видео, голосовые/видео сообщения и т.д.)
+                        UpdateType.CallbackQuery 
                     },
             // Параметр, отвечающий за обработку сообщений, пришедших за то время, когда ваш бот был оффлайн
             // True - не обрабатывать, False (стоит по умолчанию) - обрабаывать
@@ -63,8 +64,20 @@ class Program
     static async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update,
         CancellationToken cancellationToken)
     {
-        /*if (update.Type != UpdateType.Message || update.Message?.Text is null)
-            return;*/
+        if (update.Type == UpdateType.CallbackQuery && update.CallbackQuery != null)
+        {
+            var callbackQuery = update.CallbackQuery;
+            if (callbackQuery.Data.StartsWith("delete_auto_"))
+            {
+                var autoId = Guid.Parse(callbackQuery.Data.Replace("delete_auto_", ""));
+                await HandleDeleteAutoAsync(botClient, callbackQuery.Message.Chat.Id, autoId, cancellationToken);
+                return;
+            }else
+            {
+                await botClient.SendTextMessageAsync(callbackQuery.Message.Chat.Id, "Некорректный идентификатор объявления.", cancellationToken: cancellationToken);
+            }
+        }
+       
 
         var message = update.Message;
         var chatId = message.Chat.Id;
@@ -198,6 +211,34 @@ class Program
 
 
     }
+    
+    private static async Task HandleDeleteAutoAsync(ITelegramBotClient botClient, long chatId, Guid autoId, CancellationToken cancellationToken)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var autoStorage = scope.ServiceProvider.GetRequiredService<IAutoStorage>();
+        Auto auto = autoStorage.GetAutosByParametersAsync(AutoId: autoId).Result.FirstOrDefault();
+
+       await autoStorage.AutoDeleteAsync(auto);
+       
+       
+        if (autoStorage.GetAutosByParametersAsync(AutoId: autoId).Result.Count() == 0)
+        {
+            await botClient.SendTextMessageAsync(
+                chatId,
+                "Объявление успешно удалено.",
+                cancellationToken: cancellationToken
+            );
+        }
+        else
+        {
+            await botClient.SendTextMessageAsync(
+                chatId,
+                "Не удалось удалить объявление. Возможно, оно уже удалено.",
+                cancellationToken: cancellationToken
+            );
+        }
+    }
+
     private static async Task RequestBrandForSearchAsync(
         ITelegramBotClient botClient,
         long chatId,
@@ -249,14 +290,18 @@ class Program
             var users = await personStorage.GetPersonsByParametersAsync(chatId: auto.chatId);
             Person user = users.FirstOrDefault();
             
-            var message = $"🚗 *Бренд*: {auto.Brand}\n" +
-                          $"📅 *Год выпуска*: {auto.YearofIssue}\n" +
-                          $"💺 *Мест*: {auto.SeatInTheCabin}\n" +
-                          $"🔧 *Объем двигателя*: {auto.EngineSize} л\n" +
-                          $"⚙️ *Трансмиссия*: {auto.Transmission}\n" +
-                          $"📏 *Пробег*: {auto.Mileage} км\n\n" +
-                          $"👤 *Владелец*: { user.Name } {user.SecondName} {user.ThirdName} {user.UserName}\n" +
-                          $"📞 *Телефон*: {user.PhoneNumber}";
+            var message =$"🚗 *Бренд*: {auto.Brand}\n" +
+                         $"📅 *Год выпуска*: {auto.YearofIssue}\n" +
+                         $"🚙 *Тип кузова*: {auto.Body}\n" +
+                         $"💺 *Мест*: {auto.SeatInTheCabin}\n" +
+                         $"⛽ *Тип топлива*: {auto.FuelType}\n" +
+                         $"🔧 *Объем двигателя*: {auto.EngineSize} л\n" +
+                         $"⚙️ *Трансмиссия*: {auto.Transmission}\n" +
+                         $"🔗 *Привод*: {auto.Drive}\n" +
+                         $"📏 *Пробег*: {auto.Mileage} км\n" +
+                         $"📋 *Регистрация*: {auto.Registration}\n" +
+                         $"👤 *Владелец*: { user.Name } {user.SecondName} {user.ThirdName} {user.UserName}\n" +
+                         $"📞 *Телефон*: {user.PhoneNumber}";
 
             await botClient.SendTextMessageAsync(
                 chatId,
@@ -331,14 +376,21 @@ class Program
                           $"🔗 *Привод*: {auto.Drive}\n" +
                           $"📏 *Пробег*: {auto.Mileage} км\n" +
                           $"📋 *Регистрация*: {auto.Registration}";
+            
+            
+            var inlineKeyboard = new InlineKeyboardMarkup(new[]
+            {
+                InlineKeyboardButton.WithCallbackData("🗑 Удалить это объявление", $"delete_auto_ {auto.Id}")
+            });
 
-            // Отправляем информацию об автомобиле
             await botClient.SendTextMessageAsync(
                 chatId,
                 message,
+                replyMarkup: inlineKeyboard,
+                parseMode: ParseMode.Markdown,
                 cancellationToken: cancellationToken
             );
-
+            
             using var httpClient = new HttpClient();
             using var stream = await httpClient.GetStreamAsync(auto.ImageUrl);
             await botClient.SendPhotoAsync(
@@ -346,6 +398,8 @@ class Program
                 photo: stream,
                 cancellationToken: cancellationToken
             );
+            
+            
         }
     }
 
@@ -440,19 +494,25 @@ private static async Task<bool> TryAddAutoAsync(
 
         // Получаем автомобиль пользователя
         var autos = await autoStorage.GetAutosByParametersAsync(PersonId: user.Id);
-        Auto auto = autos.FirstOrDefault();
-        
-        if (auto == null)
+        foreach (var auto in autos)
         {
-            await botClient.SendTextMessageAsync(chatId, "Не удалось найти ваш автомобиль.", cancellationToken: cancellationToken);
-            return;
+            if (auto.ImageUrl == "")
+            {
+                if (auto == null)
+                {
+                    await botClient.SendTextMessageAsync(chatId, "Не удалось найти ваш автомобиль.",
+                        cancellationToken: cancellationToken);
+                    return;
+                }
+
+                // Обновляем информацию о фотографии
+                auto.ImageUrl = photoUrl;
+
+                // Сохраняем изменения в базе данных
+                await autoStorage.UpdateAutoAsync(auto);
+            }
         }
-
-        // Обновляем информацию о фотографии
-        auto.ImageUrl = photoUrl;
-
-        // Сохраняем изменения в базе данных
-        await autoStorage.UpdateAutoAsync(auto);
+        
 
         // Подтверждаем успешную загрузку фотографии
         await botClient.SendTextMessageAsync(chatId, "Фотография добавлена в ваше объявление!", cancellationToken: cancellationToken);

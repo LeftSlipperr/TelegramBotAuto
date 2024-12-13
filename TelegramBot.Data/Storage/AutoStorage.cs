@@ -62,7 +62,7 @@ public class AutoStorage : IAutoStorage
     public async Task<List<Auto>> GetAutosByParametersAsync(string? Brand = null, string? ImageUrl = null,
         int? YearofIssue = null, string? Body = null, int? SeatInTheCabin = null,
         long? chatId = null, int? EngineSize = null, string? Transmission = null,  string? Drive = null,
-        int? Mileage = null, string? Registration = null, Guid? PersonId = null,
+        int? Mileage = null, string? Registration = null, Guid? AutoId = null, Guid? PersonId = null,
         int pageNumber = 1, int pageSize = 10, string sortBy = "Brand")
     {
         var query = _dbContext.Autos.AsQueryable();
@@ -78,6 +78,7 @@ public class AutoStorage : IAutoStorage
         if (SeatInTheCabin != null) query = query.Where(c => c.SeatInTheCabin == SeatInTheCabin.Value);
         if (EngineSize != null) query = query.Where(c => c.EngineSize == EngineSize.Value);
         if (Mileage != null) query = query.Where(c => c.Mileage == Mileage.Value);
+        if (AutoId != null) query = query.Where(c => c.Id == AutoId.Value);
         if (PersonId != null) query = query.Where(c => c.PersonId == PersonId.Value);
 
         if (sortBy == "Brand")
